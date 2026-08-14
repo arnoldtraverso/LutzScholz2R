@@ -59,4 +59,6 @@ test_that("las metricas de bondad de ajuste son coherentes", {
   expect_equal(nash_sutcliffe(1:10, 1:10), 1)
   expect_equal(r2(1:10, 2 * (1:10) + 3), 1)
   expect_equal(rmse(c(1, 2, 3), c(1, 2, 3)), 0)
+  expect_equal(kge(1:10, 1:10), 1)
+  expect_lt(kge(1:10, rev(1:10)), 1)
 })

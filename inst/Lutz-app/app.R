@@ -185,15 +185,15 @@ ui <- page_navbar(
         uiOutput("ai_suma_check")
       ),
       card(
-        card_header("Ano promedio calibrado (CALIBRACION B64:N81)",
-                     class = "bg-primary text-white"),
-        DTOutput("tbl_calib_hidro")
+        card_header("Comparacion de caudales: generado vs observado (ano promedio)",
+                     class = "bg-info text-white"),
+        plotlyOutput("plot_calib_hidro", height = "380px")
       )
     ),
     card(
-      card_header("Comparacion de caudales: generado vs observado (ano promedio)",
-                   class = "bg-info text-white"),
-      plotlyOutput("plot_calib_hidro", height = "360px")
+      card_header("Ano promedio calibrado (CALIBRACION B64:N81)",
+                   class = "bg-primary text-white"),
+      DTOutput("tbl_calib_hidro")
     )
   ),
 
@@ -452,14 +452,31 @@ server <- function(input, output, session) {
   output$plot_calib_hidro <- renderPlotly({
     ac  <- ano_calib()
     obs <- obs_prom()
+    sim <- ac$caudal_m3s
     df <- data.frame(mes = factor(meses_abrev(), levels = MESES),
-                      generado = ac$caudal_m3s, observado = obs)
+                      generado = sim, observado = obs)
+
+    stats_txt <- sprintf(
+      "NSE = %.3f<br>KGE = %.3f<br>R² = %.3f<br>PBIAS = %.2f%%",
+      nash_sutcliffe(obs, sim), kge(obs, sim), r2(obs, sim), pbias(obs, sim)
+    )
+
     plot_ly(df, x = ~mes) |>
       add_bars(y = ~generado, name = "Generado", marker = list(color = "#1F6FEB")) |>
-      add_lines(y = ~observado, name = "Observado",
-                line = list(color = "#F2994A", width = 3)) |>
-      layout(xaxis = list(title = ""), yaxis = list(title = "Caudal (m3/s)"),
-             legend = list(orientation = "h", y = 1.1), hovermode = "x unified")
+      add_trace(y = ~observado, name = "Observado", type = "scatter",
+                mode = "lines+markers",
+                line = list(color = "#F2994A", width = 3),
+                marker = list(color = "#F2994A", size = 8)) |>
+      layout(
+        xaxis = list(title = ""), yaxis = list(title = "Caudal (m3/s)"),
+        legend = list(orientation = "h", y = 1.1), hovermode = "x unified",
+        annotations = list(list(
+          text = stats_txt, xref = "paper", yref = "paper",
+          x = 0.99, y = 0.98, xanchor = "right", yanchor = "top",
+          showarrow = FALSE, align = "left",
+          bgcolor = "rgba(255,255,255,0.85)", bordercolor = "#333", borderwidth = 1
+        ))
+      )
   })
 
   # -- Modulo 4: serie extendida ----------------------------------------------

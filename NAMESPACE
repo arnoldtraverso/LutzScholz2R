@@ -24,6 +24,7 @@ export(nash_sutcliffe)
 export(r2)
 export(rmse)
 export(pbias)
+export(kge)
 export(bondad_ajuste)
 
 S3method(print, lutz_params)

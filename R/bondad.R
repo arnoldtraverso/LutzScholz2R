@@ -38,15 +38,33 @@ pbias <- function(obs, sim) {
   100 * sum(sim - obs) / sum(obs)
 }
 
+#' Eficiencia de Kling-Gupta (KGE)
+#'
+#' \deqn{KGE = 1 - \sqrt{(r-1)^2 + (\alpha-1)^2 + (\beta-1)^2}}
+#' donde `r` es la correlacion de Pearson, `alpha = sd(sim)/sd(obs)` (variabilidad
+#' relativa) y `beta = mean(sim)/mean(obs)` (sesgo relativo).
+#'
+#' @inheritParams nash_sutcliffe
+#' @return Coeficiente KGE (1 = ajuste perfecto).
+#' @export
+kge <- function(obs, sim) {
+  ok <- stats::complete.cases(obs, sim)
+  obs <- obs[ok]; sim <- sim[ok]
+  r     <- stats::cor(obs, sim)
+  alpha <- stats::sd(sim) / stats::sd(obs)
+  beta  <- mean(sim) / mean(obs)
+  1 - sqrt((r - 1)^2 + (alpha - 1)^2 + (beta - 1)^2)
+}
+
 #' Tabla resumen de bondad de ajuste
 #'
 #' @inheritParams nash_sutcliffe
-#' @return `data.frame` con NSE, R^2, RMSE y PBIAS.
+#' @return `data.frame` con NSE, KGE, R^2, RMSE y PBIAS.
 #' @export
 bondad_ajuste <- function(obs, sim) {
   data.frame(
-    metrica = c("Nash-Sutcliffe", "R2", "RMSE", "PBIAS (%)"),
-    valor   = c(nash_sutcliffe(obs, sim), r2(obs, sim),
+    metrica = c("Nash-Sutcliffe", "KGE", "R2", "RMSE", "PBIAS (%)"),
+    valor   = c(nash_sutcliffe(obs, sim), kge(obs, sim), r2(obs, sim),
                 rmse(obs, sim), pbias(obs, sim))
   )
 }
