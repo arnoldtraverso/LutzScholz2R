@@ -1,0 +1,30 @@
+Package: LutzScholz2R
+Title: Modelo Hidrologico Lutz Scholz en R con Aplicativo Shiny
+Version: 0.1.0
+Authors@R:
+    person("Arnold", "Traverso", email = "arnold.traverso@gmail.com",
+           role = c("aut", "cre"))
+Description: Implementacion del modelo hidrologico deterministico-estocastico
+    Lutz Scholz (PLAN MERIS II) para la generacion de caudales medios mensuales
+    en cuencas de la sierra peruana. Incluye el calculo de precipitacion efectiva
+    (USBR), retencion de la cuenca, balance del ano promedio, calibracion por
+    regresion multiple y generacion de series sinteticas por un proceso
+    markoviano de primer orden, junto con un aplicativo Shiny interactivo.
+License: GPL-3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.1)
+Imports:
+    stats,
+    utils,
+    shiny (>= 1.7.0),
+    bslib (>= 0.5.0),
+    plotly (>= 4.10.0),
+    DT (>= 0.26)
+Suggests:
+    readxl,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+LazyData: true

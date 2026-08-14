@@ -1,9 +1,17 @@
 {
     "sortOrder": [
         {
+            "columnIndex": 4,
+            "ascending": false
+        },
+        {
             "columnIndex": 2,
             "ascending": true
+        },
+        {
+            "columnIndex": 3,
+            "ascending": false
         }
     ],
-    "path": "D:/R_Projects/LutzScholz2R/inst/Lutz-app"
+    "path": "D:/R_Projects/LutzScholz2R/tests/testthat"
 }
