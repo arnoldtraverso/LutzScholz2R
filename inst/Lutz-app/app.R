@@ -169,6 +169,34 @@ ui <- page_navbar(
     )
   ),
 
+  # -- Modulo 3b: Calibracion Hidrologica (CALIBRACION B64:R81) ---------------
+  nav_panel(
+    title = "Calibracion Hidrologica", icon = icon("scale-balanced"),
+    layout_columns(
+      col_widths = c(4, 8),
+      card(
+        card_header("Gasto y abastecimiento de la retencion", class = "bg-warning"),
+        checkboxGroupInput("meses_gasto_sel", "Meses de gasto (epoca seca):",
+                            choices = setNames(1:12, MESES),
+                            selected = as.character(4:10), inline = TRUE),
+        helpText("Los meses NO marcados se consideran de abastecimiento",
+                 "(epoca humeda): ahi se ingresa el coeficiente ai."),
+        uiOutput("ai_inputs"),
+        uiOutput("ai_suma_check")
+      ),
+      card(
+        card_header("Ano promedio calibrado (CALIBRACION B64:N81)",
+                     class = "bg-primary text-white"),
+        DTOutput("tbl_calib_hidro")
+      )
+    ),
+    card(
+      card_header("Comparacion de caudales: generado vs observado (ano promedio)",
+                   class = "bg-info text-white"),
+      plotlyOutput("plot_calib_hidro", height = "360px")
+    )
+  ),
+
   # -- Modulo 4: Serie Extendida ----------------------------------------------
   nav_panel(
     title = "Serie Extendida", icon = icon("chart-line"),
@@ -221,12 +249,99 @@ server <- function(input, output, session) {
     req(rv$precip)
     ano_promedio(rv$precip, params())
   })
-  calib <- reactive(calibrar_regresion(ano()$caudal_m3s, ano()$PE))
 
   tabla_pe <- reactive({
     req(rv$precip)
     pe_calibracion(rv$precip, params(), coef_precip = input$coef_precip)
   })
+
+  # -- Calibracion hidrologica: meses de gasto/abastecimiento interactivos ---
+  meses_gasto_sel <- reactive({
+    req(input$meses_gasto_sel)
+    sort(as.integer(input$meses_gasto_sel))
+  })
+  meses_humedos <- reactive(setdiff(1:12, meses_gasto_sel()))
+
+  # Defaults de referencia (Huancane): NA = mes de gasto o sin dato de ejemplo
+  ai_default_huancane <- c(0.40, 0.20, 0, NA, NA, NA, NA, NA, NA, NA, 0.05, 0.35)
+
+  output$ai_inputs <- renderUI({
+    hum <- meses_humedos()
+    if (length(hum) == 0) {
+      return(helpText("No hay meses de abastecimiento (todos son de gasto)."))
+    }
+    inputs <- lapply(hum, function(m) {
+      def <- ai_default_huancane[m]
+      numericInput(paste0("ai_", m), MESES[m],
+                   value = if (is.na(def)) round(1 / length(hum), 2) else def,
+                   min = -1, max = 1, step = 0.01, width = "100%")
+    })
+    tagList(
+      tags$b("Coeficiente ai (meses de abastecimiento):"),
+      do.call(splitLayout, c(inputs, list(cellWidths = paste0(100 / length(hum), "%"))))
+    )
+  })
+
+  ai_vec <- reactive({
+    hum <- meses_humedos()
+    v <- numeric(12)
+    for (m in hum) {
+      val <- input[[paste0("ai_", m)]]
+      v[m] <- if (is.null(val)) 0 else val
+    }
+    v
+  })
+
+  output$ai_suma_check <- renderUI({
+    s <- sum(ai_vec())
+    ok <- abs(s - 1) < 1e-6
+    tags$p(class = if (ok) "text-success fw-bold" else "text-danger fw-bold",
+           sprintf("Suma ai = %.3f  %s", s, if (ok) "(correcto)" else "(debe ser 1)"))
+  })
+
+  params_calib <- reactive({
+    req(rv$precip)
+    tpe <- tabla_pe()
+    ai  <- ai_vec()
+    validate(need(abs(sum(ai) - 1) < 1e-6,
+                  "La suma de los coeficientes ai debe ser 1 (ver panel de la izquierda)."))
+    p <- params()
+    lutz_params(area = p$area, retencion = p$retencion, a = p$a, b0 = p$b0, q0 = p$q0,
+                meses_gasto = meses_gasto_sel(), ai = ai,
+                c1 = tpe$coef$h18, c2 = tpe$coef$i18)
+  })
+
+  ano_calib <- reactive({
+    req(rv$precip)
+    ano_promedio(rv$precip, params_calib())
+  })
+
+  obs_prom <- reactive({
+    req(rv$caudal)
+    colMeans(as_matriz_mensual(rv$caudal), na.rm = TRUE)
+  })
+
+  tabla_calib_hidro <- reactive({
+    req(rv$precip, rv$caudal)
+    pc  <- params_calib()
+    pe  <- pe_usbr(precip_media_mensual(rv$precip), pc)
+    ret <- retencion(pc)
+    ac  <- ano_calib()
+    obs <- obs_prom()
+    data.frame(
+      mes = meses_abrev(), dias = pc$dias_mes,
+      P = round(pe$P, 2), PE_II = round(pe$PE_II, 2), PE_III = round(pe$PE_III, 2),
+      PE = round(pe$PE, 2), bi = round(ret$bi, 4), Gi = round(ret$Gi, 2),
+      ai = round(ret$ai, 3), Ai = round(ret$Ai, 2),
+      caudal_mm = round(ac$caudal_mm, 2), caudal_m3s = round(ac$caudal_m3s, 2),
+      caudal_obs_m3s = round(obs, 2)
+    )
+  })
+
+  # Regresion de calibracion: ahora se ajusta con el ano promedio calibrado
+  # (meses de gasto/abastecimiento y mezcla PE II-III elegidos por el usuario),
+  # igual que en CALIBRACION!B64:R81 del Excel.
+  calib <- reactive(calibrar_regresion(ano_calib()$caudal_m3s, ano_calib()$PE))
 
   serie_gen <- reactive({
     req(rv$precip)
@@ -328,6 +443,23 @@ server <- function(input, output, session) {
         yaxis2 = list(title = "PE (mm)", overlaying = "y", side = "right"),
         legend = list(orientation = "h", y = 1.1)
       )
+  })
+
+  # -- Modulo 3b: calibracion hidrologica --------------------------------------
+  output$tbl_calib_hidro <- renderDT({
+    datatable(tabla_calib_hidro(), options = list(dom = "t", pageLength = 12), rownames = FALSE)
+  })
+  output$plot_calib_hidro <- renderPlotly({
+    ac  <- ano_calib()
+    obs <- obs_prom()
+    df <- data.frame(mes = factor(meses_abrev(), levels = MESES),
+                      generado = ac$caudal_m3s, observado = obs)
+    plot_ly(df, x = ~mes) |>
+      add_bars(y = ~generado, name = "Generado", marker = list(color = "#1F6FEB")) |>
+      add_lines(y = ~observado, name = "Observado",
+                line = list(color = "#F2994A", width = 3)) |>
+      layout(xaxis = list(title = ""), yaxis = list(title = "Caudal (m3/s)"),
+             legend = list(orientation = "h", y = 1.1), hovermode = "x unified")
   })
 
   # -- Modulo 4: serie extendida ----------------------------------------------
