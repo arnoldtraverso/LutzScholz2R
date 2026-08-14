@@ -113,21 +113,15 @@ ui <- page_navbar(
   nav_panel(
     title = "Parametros de Cuenca", icon = icon("sliders"),
     layout_columns(
-      col_widths = c(4, 4, 4),
+      col_widths = c(6, 6),
       card(
         card_header("Geomorfologia y retencion", class = "bg-warning"),
         numericInput("area", "Area de la cuenca (km2):", value = 3631.19, min = 0.1),
         numericInput("k_agot", "Constante K (agotamiento):", value = 0.03, min = 0, step = 0.001),
         numericInput("reten", "Retencion R (mm):", value = 47, min = 0),
+        numericInput("q0", "Caudal base q0 (m3/s):", value = 2.54, min = 0),
         helpText("El coeficiente de agotamiento (a) y la relacion de caudales a",
                  "30 dias (bo) se calculan automaticamente a partir del area y de K.")
-      ),
-      card(
-        card_header("Generacion de la serie", class = "bg-secondary text-white"),
-        numericInput("q0", "Caudal base q0 (m3/s):", value = 2.54, min = 0),
-        selectInput("curva", "Curva PE para la generacion:",
-                    c("PE II (fiel al Excel)" = "II", "PE mezclada (c1,c2)" = "mix",
-                      "PE I" = "I", "PE III" = "III"))
       ),
       card(
         card_header("Parametros activos", class = "bg-success text-white"),
@@ -153,29 +147,16 @@ ui <- page_navbar(
     )
   ),
 
-  # -- Modulo 3: Balance Hidrico (Ano promedio) -------------------------------
-  nav_panel(
-    title = "Balance Hidrico", icon = icon("tint"),
-    layout_columns(
-      col_widths = c(7, 5),
-      card(
-        card_header("Ano promedio (modelo deterministico)", class = "bg-primary text-white"),
-        DTOutput("tbl_ano")
-      ),
-      card(
-        card_header("Caudal medio mensual", class = "bg-info text-white"),
-        plotlyOutput("plot_ano", height = "360px")
-      )
-    )
-  ),
-
-  # -- Modulo 3b: Calibracion Hidrologica (CALIBRACION B64:R81) ---------------
+  # -- Modulo 3: Calibracion Hidrologica (CALIBRACION B64:R81) ----------------
   nav_panel(
     title = "Calibracion Hidrologica", icon = icon("scale-balanced"),
     layout_columns(
       col_widths = c(4, 8),
       card(
-        card_header("Gasto y abastecimiento de la retencion", class = "bg-warning"),
+        card_header("Configuracion de la calibracion", class = "bg-warning"),
+        selectInput("curva", "Curva PE para calibrar:",
+                    c("PE mezclada II-III (fiel al Excel)" = "mix",
+                      "PE II pura" = "II", "PE I pura" = "I", "PE III pura" = "III")),
         checkboxGroupInput("meses_gasto_sel", "Meses de gasto (epoca seca):",
                             choices = setNames(1:12, MESES),
                             selected = as.character(4:10), inline = TRUE),
@@ -197,7 +178,22 @@ ui <- page_navbar(
     )
   ),
 
-  # -- Modulo 4: Serie Extendida ----------------------------------------------
+  # -- Modulo 4: Balance Hidrico (Ano promedio, igual a Calibracion Hidrologica) ----
+  nav_panel(
+    title = "Balance Hidrico", icon = icon("tint"),
+    card(
+      card_header("Ano promedio calibrado (= Calibracion Hidrologica)",
+                   class = "bg-primary text-white"),
+      DTOutput("tbl_ano")
+    ),
+    card(
+      card_header("Precipitacion, precipitacion efectiva y caudal medio mensual",
+                   class = "bg-info text-white"),
+      plotlyOutput("plot_ano", height = "400px")
+    )
+  ),
+
+  # -- Modulo 5: Serie Extendida ----------------------------------------------
   nav_panel(
     title = "Serie Extendida", icon = icon("chart-line"),
     layout_columns(
@@ -245,11 +241,6 @@ server <- function(input, output, session) {
   })
 
   # -- Cadena del modelo ------------------------------------------------------
-  ano <- reactive({
-    req(rv$precip)
-    ano_promedio(rv$precip, params())
-  })
-
   tabla_pe <- reactive({
     req(rv$precip)
     pe_calibracion(rv$precip, params(), coef_precip = input$coef_precip)
@@ -313,7 +304,7 @@ server <- function(input, output, session) {
 
   ano_calib <- reactive({
     req(rv$precip)
-    ano_promedio(rv$precip, params_calib())
+    ano_promedio(rv$precip, params_calib(), curva = input$curva)
   })
 
   obs_prom <- reactive({
@@ -331,7 +322,7 @@ server <- function(input, output, session) {
     data.frame(
       mes = meses_abrev(), dias = pc$dias_mes,
       P = round(pe$P, 2), PE_II = round(pe$PE_II, 2), PE_III = round(pe$PE_III, 2),
-      PE = round(pe$PE, 2), bi = round(ret$bi, 4), Gi = round(ret$Gi, 2),
+      PE = round(ac$PE, 2), bi = round(ret$bi, 4), Gi = round(ret$Gi, 2),
       ai = round(ret$ai, 3), Ai = round(ret$Ai, 2),
       caudal_mm = round(ac$caudal_mm, 2), caudal_m3s = round(ac$caudal_m3s, 2),
       caudal_obs_m3s = round(obs, 2)
@@ -345,13 +336,13 @@ server <- function(input, output, session) {
 
   serie_gen <- reactive({
     req(rv$precip)
-    pe <- pe_serie(rv$precip, params(), curva = input$curva)
+    pe <- pe_serie(rv$precip, params_calib(), curva = input$curva)
     usar_excel <- isTRUE(input$usar_excel) &&
       nrow(as_matriz_mensual(rv$precip)) == nrow(aleatorios_huancane)
     if (usar_excel) {
-      generar_serie(pe, calib(), params(), aleatorios = aleatorios_huancane)
+      generar_serie(pe, calib(), params_calib(), aleatorios = aleatorios_huancane)
     } else {
-      generar_serie(pe, calib(), params(), seed = input$seed)
+      generar_serie(pe, calib(), params_calib(), seed = input$seed)
     }
   })
 
@@ -426,26 +417,7 @@ server <- function(input, output, session) {
     datatable(df, options = list(dom = "t", paging = FALSE), rownames = FALSE)
   })
 
-  # -- Modulo 3: ano promedio -------------------------------------------------
-  output$tbl_ano <- renderDT({
-    df <- ano()
-    df[ , -1] <- round(df[ , -1], 3)
-    datatable(df, options = list(dom = "t", pageLength = 12), rownames = FALSE)
-  })
-  output$plot_ano <- renderPlotly({
-    df <- ano()
-    plot_ly(df, x = ~factor(mes, levels = MESES)) |>
-      add_bars(y = ~caudal_m3s, name = "Caudal (m3/s)", marker = list(color = "#1F6FEB")) |>
-      add_lines(y = ~PE, name = "PE (mm)", yaxis = "y2", line = list(color = "#F2994A")) |>
-      layout(
-        xaxis = list(title = ""),
-        yaxis = list(title = "Caudal (m3/s)"),
-        yaxis2 = list(title = "PE (mm)", overlaying = "y", side = "right"),
-        legend = list(orientation = "h", y = 1.1)
-      )
-  })
-
-  # -- Modulo 3b: calibracion hidrologica --------------------------------------
+  # -- Modulo 3: calibracion hidrologica ---------------------------------------
   output$tbl_calib_hidro <- renderDT({
     datatable(tabla_calib_hidro(), options = list(dom = "t", pageLength = 12), rownames = FALSE)
   })
@@ -479,7 +451,31 @@ server <- function(input, output, session) {
       )
   })
 
-  # -- Modulo 4: serie extendida ----------------------------------------------
+  # -- Modulo 4: balance hidrico (usa el mismo ano promedio calibrado) --------
+  output$tbl_ano <- renderDT({
+    df <- ano_calib()
+    df[ , -1] <- round(df[ , -1], 3)
+    datatable(df, options = list(dom = "t", pageLength = 12), rownames = FALSE)
+  })
+  output$plot_ano <- renderPlotly({
+    df <- ano_calib()
+    plot_ly(df, x = ~factor(mes, levels = MESES)) |>
+      add_bars(y = ~P, name = "P (mm)", marker = list(color = "#64A7DE")) |>
+      add_bars(y = ~PE, name = "PE (mm)", marker = list(color = "#1F6FEB")) |>
+      add_trace(y = ~caudal_m3s, name = "Caudal (m3/s)", yaxis = "y2",
+                type = "scatter", mode = "lines+markers",
+                line = list(color = "red", width = 3),
+                marker = list(color = "red", size = 8)) |>
+      layout(
+        barmode = "group",
+        xaxis = list(title = ""),
+        yaxis = list(title = "Precipitacion (mm)"),
+        yaxis2 = list(title = "Caudal (m3/s)", overlaying = "y", side = "right"),
+        legend = list(orientation = "h", y = 1.1), hovermode = "x unified"
+      )
+  })
+
+  # -- Modulo 5: serie extendida ----------------------------------------------
   output$print_calib <- renderPrint(print(calib()))
 
   output$plot_gen <- renderPlotly({

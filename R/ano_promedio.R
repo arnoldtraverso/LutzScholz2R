@@ -21,6 +21,8 @@ mm_a_m3s <- function(mm, area, dias) {
 #'   (enero a diciembre) o (b) una `data.frame`/matriz ano x mes; en el segundo caso
 #'   se usan las medias mensuales.
 #' @param params Objeto [lutz_params].
+#' @param curva Curva de precipitacion efectiva a usar: `"mix"` (por defecto,
+#'   `c1*PE_II + c2*PE_III`, fiel al Excel), `"I"`, `"II"` o `"III"` (curva pura).
 #'
 #' @return `data.frame` (12 filas) con columnas `mes`, `dias`, `P`, `PE`, `Gi`,
 #'   `Ai`, `caudal_mm`, `caudal_m3s`.
@@ -29,21 +31,29 @@ mm_a_m3s <- function(mm, area, dias) {
 #' @examples
 #' ano_promedio(c(130.24, 90.01, 102.13, 45.12, 12.47, 5.94,
 #'                3.5, 11.06, 29.56, 46.68, 54.84, 96.18))
-ano_promedio <- function(precip, params = huancane_params()) {
+ano_promedio <- function(precip, params = huancane_params(),
+                          curva = c("mix", "I", "II", "III")) {
   stopifnot(inherits(params, "lutz_params"))
+  curva <- match.arg(curva)
   P <- precip_media_mensual(precip)
 
-  pe  <- pe_usbr(P, params)
+  PE <- switch(curva,
+    I   = pe_curva(P, params$coef_pe$I),
+    II  = pe_curva(P, params$coef_pe$II),
+    III = pe_curva(P, params$coef_pe$III),
+    mix = params$c1 * pe_curva(P, params$coef_pe$II) +
+          params$c2 * pe_curva(P, params$coef_pe$III)
+  )
   ret <- retencion(params)
 
-  caudal_mm  <- pe$PE + ret$Gi - ret$Ai
+  caudal_mm  <- PE + ret$Gi - ret$Ai
   caudal_m3s <- mm_a_m3s(caudal_mm, params$area, params$dias_mes)
 
   data.frame(
     mes        = meses_abrev(),
     dias       = params$dias_mes,
     P          = P,
-    PE         = pe$PE,
+    PE         = PE,
     Gi         = ret$Gi,
     Ai         = ret$Ai,
     caudal_mm  = caudal_mm,
