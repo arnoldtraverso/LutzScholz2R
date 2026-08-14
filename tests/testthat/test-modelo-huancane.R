@@ -43,6 +43,18 @@ test_that("la generacion estocastica reproduce la serie del Excel (1981)", {
   expect_equal(gen_1981, exc_1981, tolerance = 1e-2)
 })
 
+test_that("pe_calibracion reproduce la tabla CALIBRACION!B2:J18 del Excel", {
+  tpe <- pe_calibracion(P_prom, par, coef_precip = 0.25)
+  expect_equal(tpe$totales$P, 627.73, tolerance = 1e-2)
+  expect_equal(tpe$totales$PE_I, 46.77, tolerance = 1e-2)
+  expect_equal(tpe$totales$PE_II, 136.6, tolerance = 1e-2)
+  expect_equal(tpe$totales$PE_III, 226.65, tolerance = 1e-2)
+  expect_equal(tpe$coef$e18, -0.226344205721919, tolerance = 1e-3)
+  expect_equal(tpe$coef$f18,  1.226344205721920, tolerance = 1e-3)
+  expect_equal(tpe$coef$h18,  0.774208772903942, tolerance = 1e-3)
+  expect_equal(tpe$coef$i18,  0.225791227096058, tolerance = 1e-3)
+})
+
 test_that("las metricas de bondad de ajuste son coherentes", {
   expect_equal(nash_sutcliffe(1:10, 1:10), 1)
   expect_equal(r2(1:10, 2 * (1:10) + 3), 1)
