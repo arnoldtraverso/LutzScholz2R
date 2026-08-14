@@ -72,20 +72,32 @@ ui <- page_navbar(
           tags$h6(tags$b("¿Cómo funciona la app?")),
           tags$ol(
             class = "mb-0",
-            tags$li("Cargas la ", tags$b("precipitación"), " y el ",
-                    tags$b("caudal observado"), " (Huancane por defecto o tus CSV)."),
+            tags$li("Cargas tus CSV de ", tags$b("precipitación"), " y ",
+                    tags$b("caudal observado"), "."),
             tags$li("Ajustas los ", tags$b("parámetros"), " de la cuenca."),
-            tags$li("Revisas el ", tags$b("balance del año promedio"), "."),
+            tags$li("Calibras el ", tags$b("año promedio"),
+                    " eligiendo curva PE y meses de gasto/abastecimiento."),
             tags$li("Generas la ", tags$b("serie extendida"),
                     " y evalúas la bondad de ajuste.")
           )
         )
       ),
+      tags$hr(),
+      tags$h6(tags$b("Proceso metodológico")),
       tags$p(
-        class = "text-muted small mb-0 mt-2",
-        tags$b("Flujo del modelo:"),
-        " Precipitación → Precip. efectiva (USBR) → Retención → ",
-        "Año promedio → Calibración → Serie generada"
+        class = "text-muted small",
+        "De la precipitación y el caudal observado que cargas, el modelo calcula la ",
+        tags$b("precipitación efectiva"), " (curvas USBR I, II y III), la ",
+        tags$b("retención de la cuenca"), " (gasto en los meses secos, abastecimiento en",
+        " los húmedos) y el ", tags$b("balance del año promedio"), ". Con ese balance se",
+        " ajusta una ", tags$b("regresión"), " que luego alimenta la ",
+        tags$b("generación estocástica"), " de la serie extendida, evaluada frente al",
+        " caudal observado con NSE, KGE, R² y PBIAS."
+      ),
+      tags$div(
+        style = "text-align: center;",
+        tags$img(src = "flujograma_lutz.png", alt = "Flujograma del modelo Lutz Scholz",
+                 style = "max-width: 100%; height: auto; border: 1px solid #dee2e6; border-radius: 6px;")
       )
     ),
 
